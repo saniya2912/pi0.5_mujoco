@@ -1,0 +1,10 @@
+# Core simulation
+mujoco>=3.1.0
+
+# Policy inference
+torch>=2.2.0
+openpi                   # Physical Intelligence π0.5 — install from source or PyPI
+
+# Image processing
+opencv-python>=4.9.0
+numpy>=1.26.0
