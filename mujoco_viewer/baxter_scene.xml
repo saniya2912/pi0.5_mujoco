@@ -1,0 +1,145 @@
+<mujoco model="baxter">
+  <compiler angle="radian" meshdir="/home/robotlab/Desktop/saniya_ws/pi0.5_mujoco/mujoco_viewer/meshes/"/>
+
+  <asset>
+    <mesh name="base_link" content_type="model/stl" file="base_link.STL"/>
+    <mesh name="base_link_collision" content_type="model/stl" file="base_link_collision.STL"/>
+    <mesh name="PEDESTAL" content_type="model/stl" file="PEDESTAL.STL"/>
+    <mesh name="pedestal_link_collision" content_type="model/stl" file="pedestal_link_collision.STL"/>
+    <mesh name="H0" content_type="model/stl" file="H0.STL"/>
+    <mesh name="H1" content_type="model/stl" file="H1.STL"/>
+    <mesh name="S0" content_type="model/stl" file="S0.STL"/>
+    <mesh name="S1" content_type="model/stl" file="S1.STL"/>
+    <mesh name="E0" content_type="model/stl" file="E0.STL"/>
+    <mesh name="E1" content_type="model/stl" file="E1.STL"/>
+    <mesh name="W0" content_type="model/stl" file="W0.STL"/>
+    <mesh name="W1" content_type="model/stl" file="W1.STL"/>
+    <mesh name="W2" content_type="model/stl" file="W2.STL"/>
+  </asset>
+
+  <worldbody>
+    <geom name="floor" size="6 6 0.1" pos="0 0 -0.93" type="plane" rgba="0.8 0.8 0.8 1"/>
+    <geom size="0.001" pos="0.11 0 0.75" contype="0" conaffinity="0" group="1" density="0" rgba="0.8 0.3 0.3 0.3"/>
+    <geom size="0.22" pos="0.04 -0.04 0.75" rgba="0.8 0.3 0.3 0.3"/>
+    <geom size="0.001" pos="0.11 0 0.75" contype="0" conaffinity="0" group="1" density="0" rgba="0.8 0.3 0.3 0.3"/>
+    <geom size="0.22" pos="0.04 0.04 0.75" rgba="0.8 0.3 0.3 0.3"/>
+    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="base_link"/>
+    <geom type="mesh" mesh="base_link_collision"/>
+    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.2 0.2 0.2 1" mesh="PEDESTAL"/>
+    <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="pedestal_link_collision"/>
+    <geom size="0.085 0.005" pos="0.06 0 0.82653" type="cylinder" contype="0" conaffinity="0" group="1" density="0" rgba="0.2 0.2 0.2 1"/>
+    <geom size="0.001" pos="0.0947 0 0.817" rgba="0.2 0.2 0.2 1"/>
+    <camera name="overview" pos="3 -3 2.5"/>
+    <light name="key_light" pos="3 -3 5" dir="-0.408248 0.408248 -0.816497" diffuse="1 0.95 0.9" specular="0.4 0.4 0.4"/>
+    <light name="fill_light" pos="-3 3 4" dir="0.485071 -0.485071 -0.727607" castshadow="false" diffuse="0.5 0.5 0.6" specular="0 0 0"/>
+    <body name="head" pos="0.06 0 0.686">
+      <inertial pos="0.0537715 0.00990565 0.000160304" quat="0.604286 -0.200824 0.209462 0.742047" mass="0.988238" diaginertia="0.0105917 0.00870271 0.00772375"/>
+      <joint name="head_pan" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-50000 50000" damping="0.7"/>
+      <geom pos="0 0 0.00953" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.2 0.2 0.2 1" mesh="H0"/>
+      <geom size="0.001" rgba="0.2 0.2 0.2 1"/>
+      <geom pos="0.0868552 0 -0.00317182" quat="0.704252 0.704252 0.063474 -0.063474" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="H1"/>
+      <geom size="0.001" pos="0.1227 0 0" quat="0.453099 0.542864 0.542864 0.453099" rgba="0.5 0.1 0.1 1"/>
+      <geom size="0.109 0.08 0.0005" pos="0.119839 0 -0.0157421" quat="0.378364 0.597361 0.597361 0.378364" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 0 1"/>
+    </body>
+    <body name="right_upper_shoulder" pos="0.0640272 -0.259027 0.129626" quat="0.923879 0 0 -0.382684">
+      <inertial pos="0.01783 0.00086 0.19127" quat="0.975667 0.0673303 -0.206117 0.0325173" mass="5.70044" diaginertia="0.0498344 0.0377511 0.0331351"/>
+      <joint name="right_s0" pos="0 0 0" axis="0 0 1" range="-1.70168 1.70168" actuatorfrcrange="-50 50" damping="0.7"/>
+      <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="S0"/>
+      <geom size="0.06 0.1361" pos="0 0 0.1361" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+      <body name="right_lower_shoulder" pos="0.069 0 0.27035" quat="0.707107 -0.707107 0 0">
+        <inertial pos="0.0684512 0.00268992 -0.00528984" quat="0.447488 0.536947 0.564248 0.439392" mass="3.22708" diaginertia="0.0278993 0.0212329 0.0112938"/>
+        <joint name="right_s1" pos="0 0 0" axis="0 0 1" range="-2.147 1.047" actuatorfrcrange="-100 100" damping="0.7"/>
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="S1"/>
+        <geom size="0.06 0.06" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+        <geom size="0.06 0.1365" pos="0.2435 0 0" quat="0.5 0.5 0.5 0.5" type="cylinder"/>
+        <body name="right_upper_elbow" pos="0.102 0 0" quat="0.5 0.5 0.5 0.5">
+          <inertial pos="-0.00276 0.00132 0.18086" quat="0.838995 -0.0423128 -0.121287 0.52876" mass="4.31272" diaginertia="0.0287695 0.0273625 0.011409"/>
+          <joint name="right_e0" pos="0 0 0" axis="0 0 1" range="-3.05418 3.05418" actuatorfrcrange="-50 50" damping="0.7"/>
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="E0"/>
+          <geom size="0.06 0.0535" pos="0 0 -0.0535" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+          <body name="right_lower_elbow" pos="0.069 0 0.26242" quat="0.5 -0.5 -0.5 -0.5">
+            <inertial pos="0.026113 0.00158992 -0.0111695" quat="0.440451 0.577134 0.562766 0.395239" mass="2.07216" diaginertia="0.01321 0.00950034 0.00685707"/>
+            <joint name="right_e1" pos="0 0 0" axis="0 0 1" range="-0.05 2.618" actuatorfrcrange="-50 50" damping="0.7"/>
+            <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="E1"/>
+            <geom size="0.06 0.05" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+            <geom size="0.06 0.136" pos="0.224 0 0" quat="0.5 0.5 0.5 0.5" type="cylinder"/>
+            <body name="right_upper_forearm" pos="0.10359 0 0" quat="0.5 0.5 0.5 0.5">
+              <inertial pos="-0.00168244 0.0045998 0.139519" quat="0.892617 -0.0256231 0.00447879 0.450065" mass="2.24675" diaginertia="0.0169162 0.0165513 0.00371155"/>
+              <joint name="right_w0" pos="0 0 0" axis="0 0 1" range="-3.059 3.059" actuatorfrcrange="-15 15" damping="0.7"/>
+              <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="W0"/>
+              <geom size="0.06 0.044" pos="0 0 -0.044" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+              <body name="right_lower_forearm" pos="0.01 0 0.2707" quat="0.5 -0.5 -0.5 -0.5">
+                <inertial pos="0.06041 0.00697 0.006" quat="0.456911 0.468526 0.475683 0.587743" mass="1.60979" diaginertia="0.00708828 0.00552689 0.00379383"/>
+                <joint name="right_w1" pos="0 0 0" axis="0 0 1" range="-1.5708 2.094" actuatorfrcrange="-15 15" damping="0.7"/>
+                <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="W1"/>
+                <geom size="0.06 0.05" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+                <body name="right_wrist" pos="0.115975 0 0" quat="0.5 0.5 0.5 0.5">
+                  <inertial pos="0.0429409 0.000213377 -0.00638856" quat="0.0102866 0.86857 -0.00674371 0.495413" mass="0.54278" diaginertia="0.00283755 0.00279046 0.000445529"/>
+                  <joint name="right_w2" pos="0 0 0" axis="0 0 1" range="-3.059 3.059" actuatorfrcrange="-15 15" damping="0.7"/>
+                  <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.1 0.1 0.1 1" mesh="W2"/>
+                  <geom size="0.06 0.0825" type="cylinder" rgba="0.1 0.1 0.1 1"/>
+                  <geom size="0.04 0.0232" pos="0 0 0.09035" type="cylinder"/>
+                  <geom size="0.02 0.005" pos="0.03825 0.012 0.128905" quat="0.707107 0 0 -0.707107" type="cylinder" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 1 0.8"/>
+                  <geom size="0.0025 0.01 0.0025" pos="0.032 -0.020245 0.14235" quat="0.5 -0.5 -0.5 -0.5" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 1 0.8"/>
+                  <geom size="0.005 0.005 0.005" pos="0.00198 0.000133 0.09895" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 0 1"/>
+                  <geom size="0.0125 0.0375 0.0175" pos="0 0 0.09355" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1"/>
+                  <geom size="0.005 0.005 0.005" pos="0 0 0.13855" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 0 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+    <body name="left_upper_shoulder" pos="0.0640272 0.259027 0.129626" quat="0.923879 0 0 0.382684">
+      <inertial pos="0.01783 0.00086 0.19127" quat="0.975667 0.0673303 -0.206117 0.0325173" mass="5.70044" diaginertia="0.0498344 0.0377511 0.0331351"/>
+      <joint name="left_s0" pos="0 0 0" axis="0 0 1" range="-1.70168 1.70168" actuatorfrcrange="-50 50" damping="0.7"/>
+      <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="S0"/>
+      <geom size="0.06 0.1361" pos="0 0 0.1361" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+      <body name="left_lower_shoulder" pos="0.069 0 0.27035" quat="0.707107 -0.707107 0 0">
+        <inertial pos="0.0684512 0.00268992 -0.00528984" quat="0.447488 0.536947 0.564248 0.439392" mass="3.22708" diaginertia="0.0278993 0.0212329 0.0112938"/>
+        <joint name="left_s1" pos="0 0 0" axis="0 0 1" range="-2.147 1.047" actuatorfrcrange="-100 100" damping="0.7"/>
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="S1"/>
+        <geom size="0.06 0.06" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+        <geom size="0.06 0.1365" pos="0.2435 0 0" quat="0.5 0.5 0.5 0.5" type="cylinder"/>
+        <body name="left_upper_elbow" pos="0.102 0 0" quat="0.5 0.5 0.5 0.5">
+          <inertial pos="-0.00276 0.00132 0.18086" quat="0.838995 -0.0423128 -0.121287 0.52876" mass="4.31272" diaginertia="0.0287695 0.0273625 0.011409"/>
+          <joint name="left_e0" pos="0 0 0" axis="0 0 1" range="-3.05418 3.05418" actuatorfrcrange="-50 50" damping="0.7"/>
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="E0"/>
+          <geom size="0.06 0.0535" pos="0 0 -0.0535" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+          <body name="left_lower_elbow" pos="0.069 0 0.26242" quat="0.5 -0.5 -0.5 -0.5">
+            <inertial pos="0.026113 0.00158992 -0.0111695" quat="0.440451 0.577134 0.562766 0.395239" mass="2.07216" diaginertia="0.01321 0.00950034 0.00685707"/>
+            <joint name="left_e1" pos="0 0 0" axis="0 0 1" range="-0.05 2.618" actuatorfrcrange="-50 50" damping="0.7"/>
+            <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="E1"/>
+            <geom size="0.06 0.05" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+            <geom size="0.06 0.136" pos="0.224 0 0" quat="0.5 0.5 0.5 0.5" type="cylinder"/>
+            <body name="left_upper_forearm" pos="0.10359 0 0" quat="0.5 0.5 0.5 0.5">
+              <inertial pos="-0.00168244 0.0045998 0.139519" quat="0.892617 -0.0256231 0.00447879 0.450065" mass="2.24675" diaginertia="0.0169162 0.0165513 0.00371155"/>
+              <joint name="left_w0" pos="0 0 0" axis="0 0 1" range="-3.059 3.059" actuatorfrcrange="-15 15" damping="0.7"/>
+              <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="W0"/>
+              <geom size="0.06 0.044" pos="0 0 -0.044" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+              <body name="left_lower_forearm" pos="0.01 0 0.2707" quat="0.5 -0.5 -0.5 -0.5">
+                <inertial pos="0.06041 0.00697 0.006" quat="0.456911 0.468526 0.475683 0.587743" mass="1.60979" diaginertia="0.00708828 0.00552689 0.00379383"/>
+                <joint name="left_w1" pos="0 0 0" axis="0 0 1" range="-1.5708 2.094" actuatorfrcrange="-15 15" damping="0.7"/>
+                <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1" mesh="W1"/>
+                <geom size="0.06 0.05" type="cylinder" rgba="0.5 0.1 0.1 1"/>
+                <body name="left_wrist" pos="0.115975 0 0" quat="0.5 0.5 0.5 0.5">
+                  <inertial pos="0.0429409 0.000213377 -0.00638856" quat="0.0102866 0.86857 -0.00674371 0.495413" mass="0.54278" diaginertia="0.00283755 0.00279046 0.000445529"/>
+                  <joint name="left_w2" pos="0 0 0" axis="0 0 1" range="-3.059 3.059" actuatorfrcrange="-15 15" damping="0.7"/>
+                  <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.1 0.1 0.1 1" mesh="W2"/>
+                  <geom size="0.06 0.0825" type="cylinder" rgba="0.1 0.1 0.1 1"/>
+                  <geom size="0.04 0.0232" pos="0 0 0.09035" type="cylinder"/>
+                  <geom size="0.02 0.005" pos="0.03825 0.012 0.128905" quat="0.707107 0 0 -0.707107" type="cylinder" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 1 0.8"/>
+                  <geom size="0.0025 0.01 0.0025" pos="0.032 -0.020245 0.14235" quat="0.5 -0.5 -0.5 -0.5" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 1 0.8"/>
+                  <geom size="0.005 0.005 0.005" pos="0.00198 0.000133 0.09895" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 0 1"/>
+                  <geom size="0.0125 0.0375 0.0175" pos="0 0 0.09355" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0.5 0.1 0.1 1"/>
+                  <geom size="0.005 0.005 0.005" pos="0 0 0.13855" type="box" contype="0" conaffinity="0" group="1" density="0" rgba="0 0 0 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
