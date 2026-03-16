@@ -1,0 +1,9 @@
+<robot name="test">
+  <link name="base">
+    <collision>
+      <geometry>
+        <mesh filename="meshes/torso/base_link_collision.STL"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>
