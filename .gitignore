@@ -1,0 +1,17 @@
+# Python virtual environments
+pi0.5_venv/
+.venv/
+venv/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# MuJoCo logs
+MUJOCO_LOG.TXT
+
+# Editor / OS
+.DS_Store
+*.swp
