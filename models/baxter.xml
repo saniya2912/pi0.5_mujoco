@@ -62,29 +62,33 @@
     <light pos="0 0 4"   dir="0 0 -1"    diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" castshadow="true"/>
     <light pos="2 2 3"   dir="-1 -1 -1"  diffuse="0.5 0.5 0.5" castshadow="false"/>
 
-    <!-- Floor -->
+    <!-- Floor: Baxter's pedestal bottom sits at ~z=-0.924 m when the robot
+         origin is at z=0, so the floor is placed just below that. -->
     <geom name="floor" type="plane" size="5 5 0.1" rgba="0.75 0.75 0.75 1"
-          contype="1" conaffinity="1" friction="0.8 0.1 0.1"/>
+          pos="0 0 -0.93" contype="1" conaffinity="1" friction="0.8 0.1 0.1"/>
 
     <!-- ── TABLE ─────────────────────────────────────────────────────────
          Thin surface placed at a comfortable reach distance in front of
          the right arm.  Table top is at z = 0.30 m.
     ──────────────────────────────────────────────────────────────────── -->
+    <!-- Table top at z=0.30 m (robot workspace height).
+         Floor is at z=-0.93, so legs span 1.18 m (half=0.59).
+         Leg centres at z=-0.615 relative to body → bottoms at z=-0.93. -->
     <body name="table" pos="0.65 -0.20 0.275">
       <geom name="table_top"  type="box" size="0.25 0.25 0.025"
             rgba="0.55 0.40 0.25 1" contype="1" conaffinity="1"
             friction="0.8 0.1 0.1"/>
-      <geom name="table_leg1" type="cylinder" size="0.02 0.135"
-            pos=" 0.22  0.22 -0.160" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg1" type="cylinder" size="0.02 0.59"
+            pos=" 0.22  0.22 -0.615" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg2" type="cylinder" size="0.02 0.135"
-            pos="-0.22  0.22 -0.160" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg2" type="cylinder" size="0.02 0.59"
+            pos="-0.22  0.22 -0.615" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg3" type="cylinder" size="0.02 0.135"
-            pos=" 0.22 -0.22 -0.160" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg3" type="cylinder" size="0.02 0.59"
+            pos=" 0.22 -0.22 -0.615" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg4" type="cylinder" size="0.02 0.135"
-            pos="-0.22 -0.22 -0.160" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg4" type="cylinder" size="0.02 0.59"
+            pos="-0.22 -0.22 -0.615" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
     </body>
 
@@ -116,7 +120,8 @@
           <inertial pos="0 0 0" mass="60.86397744"
                     fullinertia="5.0635929 6.08689388 4.96191932 0.00103417 0.80199628 0.00105311"/>
           <geom class="visual"    name="pedestal_v" type="mesh" mesh="pedestal_mesh" rgba="0.2 0.2 0.2 1"/>
-          <geom class="collision" name="pedestal_c" type="cylinder" size="0.20 0.40" pos="0 0 -0.40"/>
+          <!-- half-height=0.465 → bottom at z=-0.93, flush with floor -->
+          <geom class="collision" name="pedestal_c" type="cylinder" size="0.20 0.465" pos="0 0 -0.465"/>
         </body>
 
         <!-- ── HEAD ─────────────────────────────────────────────── -->

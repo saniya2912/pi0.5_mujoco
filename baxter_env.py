@@ -106,20 +106,24 @@ class BaxterEnv:
 
         Returns:
             dict with:
-                "image": uint8 RGB array of shape (C, H, W) = (3, 224, 224)
-                "state": float64 joint-position array of shape (NUM_JOINTS,)
+                "image":       uint8 RGB array (C, H, W) = (3, 224, 224) — head camera
+                "wrist_image": uint8 RGB array (C, H, W) = (3, 224, 224) — right hand camera
+                "state":       float64 joint-position array (NUM_JOINTS,)
         """
-        # Render the head camera view
+        # Head (base) camera
         self._renderer.update_scene(self._data, camera=CAMERA_NAME)
         image_hwc = self._renderer.render()  # (H, W, 3) uint8
-
-        # Transpose to channel-first format expected by the VLA model
         image_chw = np.transpose(image_hwc, (2, 0, 1))  # (3, H, W)
+
+        # Right wrist camera
+        self._renderer.update_scene(self._data, camera="right_hand_camera")
+        wrist_hwc = self._renderer.render()  # (H, W, 3) uint8
+        wrist_chw = np.transpose(wrist_hwc, (2, 0, 1))  # (3, H, W)
 
         # Joint positions (qpos) — all 15 joints
         state = self._data.qpos.copy()  # (15,)
 
-        return {"image": image_chw, "state": state}
+        return {"image": image_chw, "wrist_image": wrist_chw, "state": state}
 
     def render(self) -> np.ndarray:
         """Render the current frame for visualisation (HWC uint8).

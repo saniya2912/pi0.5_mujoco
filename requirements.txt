@@ -1,10 +1,21 @@
-# Core simulation
+# MuJoCo simulation
 mujoco>=3.1.0
 
-# Policy inference
-torch>=2.2.0
-openpi                   # Physical Intelligence π0.5 — install from source or PyPI
-
 # Image processing
-opencv-python>=4.9.0
 numpy>=1.26.0
+Pillow>=10.0.0
+
+# WebSocket policy client (openpi_client)
+websockets>=12.0
+msgpack>=1.0.0
+msgpack-numpy>=0.4.8
+
+# CLI argument parsing
+tyro>=0.5.0
+
+# Video recording
+imageio>=2.36.0
+imageio-ffmpeg>=0.4.9
+
+# Typing
+typing_extensions>=4.12.0
