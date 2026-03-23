@@ -120,8 +120,9 @@ class BaxterEnv:
         wrist_hwc = self._renderer.render()  # (H, W, 3) uint8
         wrist_chw = np.transpose(wrist_hwc, (2, 0, 1))  # (3, H, W)
 
-        # Joint positions (qpos) — all 15 joints
-        state = self._data.qpos.copy()  # (15,)
+        # Robot joint positions only (skip cube free-joint at qpos[0:7])
+        # Order: head_pan(7) right_arm(8:15) left_arm(15:22)
+        state = self._data.qpos[7:22].copy()  # (15,)
 
         return {"image": image_chw, "wrist_image": wrist_chw, "state": state}
 

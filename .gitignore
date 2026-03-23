@@ -12,6 +12,15 @@ __pycache__/
 # MuJoCo logs
 MUJOCO_LOG.TXT
 
+# Demonstration data (large HDF5 files — regenerate with record_demos.py)
+data/
+
+# Temporary scratch files from camera testing
+models/test*.xml
+models/test*.urdf
+scripts/cam_tests/
+
 # Editor / OS
 .DS_Store
 *.swp
+*.swo

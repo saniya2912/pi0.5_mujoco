@@ -76,27 +76,26 @@
           pos="0 0 -0.93" contype="1" conaffinity="1" friction="0.8 0.1 0.1"/>
 
     <!-- ── TABLE ─────────────────────────────────────────────────────────
-         Thin surface placed at a comfortable reach distance in front of
-         the right arm.  Table top is at z = 0.30 m.
+         Table top raised to z = 0.50 m so the right arm can reach the
+         surface (arm grid-search best ≈ z=0.51 at x=0.65).
+         Body centre at z=0.475.  Legs span z=-0.93 to z=0.45 (height=1.38m,
+         half=0.69m, centres at z=-0.715 relative to body).
     ──────────────────────────────────────────────────────────────────── -->
-    <!-- Table top at z=0.30 m (robot workspace height).
-         Floor is at z=-0.93, so legs span 1.18 m (half=0.59).
-         Leg centres at z=-0.615 relative to body → bottoms at z=-0.93. -->
-    <body name="table" pos="0.65 -0.20 0.275">
+    <body name="table" pos="0.65 -0.20 0.475">
       <geom name="table_top"  type="box" size="0.25 0.25 0.025"
             rgba="0.55 0.40 0.25 1" contype="1" conaffinity="1"
             friction="0.8 0.1 0.1"/>
-      <geom name="table_leg1" type="cylinder" size="0.02 0.59"
-            pos=" 0.22  0.22 -0.615" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg1" type="cylinder" size="0.02 0.69"
+            pos=" 0.22  0.22 -0.715" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg2" type="cylinder" size="0.02 0.59"
-            pos="-0.22  0.22 -0.615" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg2" type="cylinder" size="0.02 0.69"
+            pos="-0.22  0.22 -0.715" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg3" type="cylinder" size="0.02 0.59"
-            pos=" 0.22 -0.22 -0.615" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg3" type="cylinder" size="0.02 0.69"
+            pos=" 0.22 -0.22 -0.715" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
-      <geom name="table_leg4" type="cylinder" size="0.02 0.59"
-            pos="-0.22 -0.22 -0.615" rgba="0.45 0.30 0.20 1"
+      <geom name="table_leg4" type="cylinder" size="0.02 0.69"
+            pos="-0.22 -0.22 -0.715" rgba="0.45 0.30 0.20 1"
             contype="0" conaffinity="0"/>
     </body>
 
@@ -105,10 +104,15 @@
          Static (welded to world) — acts as the policy's visual target.
          To make it dynamic/graspable, add <joint type="free"/> inside.
     ──────────────────────────────────────────────────────────────────── -->
-    <body name="target_cube" pos="0.65 -0.20 0.325">
+    <!-- Table top at z=0.50, cube half-size=0.025 → resting centre z=0.525.
+         Start at z=0.55 so it drops onto the table at episode reset. -->
+    <body name="target_cube" pos="0.65 -0.20 0.55">
+      <!-- Free joint lets the cube be pushed by the arm -->
+      <joint name="cube_free" type="free"/>
+      <inertial pos="0 0 0" mass="0.050" diaginertia="2e-5 2e-5 2e-5"/>
       <geom name="cube" type="box" size="0.025 0.025 0.025"
             rgba="0.9 0.1 0.1 1" contype="1" conaffinity="1"
-            friction="0.8 0.1 0.1"/>
+            friction="0.6 0.1 0.1"/>
     </body>
 
     <!-- ── BASE / TORSO ─────────────────────────────────────────── -->
@@ -236,10 +240,12 @@
                             <camera name="right_hand_camera" fovy="90"/>
                           </body>
 
+                          <!-- Endpoint site for IK / Jacobian (invisible, at fingertip) -->
+                          <site name="right_endpoint" pos="0 0 0.025" size="0.005" rgba="0 0 0 0"/>
                           <!-- Right endpoint marker (yellow sphere) -->
                           <body name="right_gripper" pos="0 0 0.025">
                             <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
-                            <geom class="visual" name="right_endpoint"
+                            <geom class="visual" name="right_endpoint_vis"
                                   type="sphere" size="0.012" rgba="1 1 0 1"/>
                           </body>
                         </body><!-- /right_hand -->
@@ -391,8 +397,9 @@
     All values are within joint limits.
   ================================================================ -->
   <keyframe>
+    <!-- qpos order: cube_free(7) head(1) right_arm(7) left_arm(7) = 22 total -->
     <key name="home"
-         qpos="0   0 -0.9599 0 2.0 0 0.7854 0   0 -0.9599 0 2.0 0 0.7854 0"/>
+         qpos="0.65 -0.20 0.55 1 0 0 0   0   0 -0.9599 0 2.0 0 0.7854 0   0 -0.9599 0 2.0 0 0.7854 0"/>
   </keyframe>
 
 </mujoco>
