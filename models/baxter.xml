@@ -58,6 +58,14 @@
   ================================================================ -->
   <worldbody>
 
+    <!-- ── SCENE CAMERA (world-fixed) ────────────────────────────────────────
+         Positioned to the front-right of the workspace, elevated.
+         Gives a clear view of the robot, table, and target cube at all times.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <body name="scene_camera_body" pos="1.0 -1.2 1.2">
+      <camera name="scene_camera" xyaxes="0.832 0.555 0  -0.400 0.600 0.693" fovy="55"/>
+    </body>
+
     <!-- Lighting -->
     <light pos="0 0 4"   dir="0 0 -1"    diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" castshadow="true"/>
     <light pos="2 2 3"   dir="-1 -1 -1"  diffuse="0.5 0.5 0.5" castshadow="false"/>
@@ -219,9 +227,11 @@
                           <geom class="collision" name="rhand_c" type="cylinder"
                                 size="0.04 0.0232" pos="0 0 -0.0232"/>
 
-                          <!-- Right hand camera: xyz="0.03825 0.012 0.015355" rpy="0 0 -1.5708" -->
+                          <!-- Right hand camera: positioned 6 cm forward and 4 cm up from
+                               right_hand origin, looking along +X of hand frame (sideways/forward).
+                               euler="0 1.5708 0" → camera -Z = hand +X direction. -->
                           <body name="right_hand_camera_body"
-                                pos="0.03825 0.012 0.015355" euler="0 0 -1.5708">
+                                pos="0.06 0 0.04" euler="0 1.5708 0">
                             <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
                             <camera name="right_hand_camera" fovy="90"/>
                           </body>

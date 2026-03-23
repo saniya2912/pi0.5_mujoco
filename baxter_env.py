@@ -18,8 +18,8 @@ import numpy as np
 IMAGE_HEIGHT = 224
 IMAGE_WIDTH = 224
 
-# Camera to use for policy observations (head-mounted camera)
-CAMERA_NAME = "head_camera"
+# Camera to use for policy observations (world-fixed scene camera)
+CAMERA_NAME = "scene_camera"
 
 # Baxter has 15 actuated joints: head_pan + 7 right arm + 7 left arm
 NUM_JOINTS = 15
