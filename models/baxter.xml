@@ -33,7 +33,13 @@
     </default>
     <!-- Collision geoms: participate in contact -->
     <default class="collision">
-      <geom contype="1" conaffinity="1" rgba="0.4 0.4 0.4 0"/>
+      <!-- Arm/head geoms: contype=2 (arm), conaffinity=4 (objects only).
+           Collision rules (A·B iff (A.type&B.aff)|(B.type&A.aff) != 0):
+             arm(2,4) vs arm(2,4)   → (2&4)|(2&4)=0  — no arm self-collision
+             arm(2,4) vs table(1,4) → (2&4)|(1&4)=0  — arm passes through table
+             arm(2,4) vs cube(4,5)  → (2&5)|(4&4)=4  — arm hits cube  ✓
+      -->
+      <geom contype="2" conaffinity="4" rgba="0.4 0.4 0.4 0"/>
     </default>
   </default>
 
@@ -73,7 +79,7 @@
     <!-- Floor: Baxter's pedestal bottom sits at ~z=-0.924 m when the robot
          origin is at z=0, so the floor is placed just below that. -->
     <geom name="floor" type="plane" size="5 5 0.1" rgba="0.75 0.75 0.75 1"
-          pos="0 0 -0.93" contype="1" conaffinity="1" friction="0.8 0.1 0.1"/>
+          pos="0 0 -0.93" contype="1" conaffinity="4" friction="0.8 0.1 0.1"/>
 
     <!-- ── TABLE ─────────────────────────────────────────────────────────
          Table top raised to z = 0.50 m so the right arm can reach the
@@ -83,7 +89,7 @@
     ──────────────────────────────────────────────────────────────────── -->
     <body name="table" pos="0.65 -0.20 0.475">
       <geom name="table_top"  type="box" size="0.25 0.25 0.025"
-            rgba="0.55 0.40 0.25 1" contype="1" conaffinity="1"
+            rgba="0.55 0.40 0.25 1" contype="1" conaffinity="4"
             friction="0.8 0.1 0.1"/>
       <geom name="table_leg1" type="cylinder" size="0.02 0.69"
             pos=" 0.22  0.22 -0.715" rgba="0.45 0.30 0.20 1"
@@ -100,18 +106,20 @@
     </body>
 
     <!-- ── TARGET CUBE ───────────────────────────────────────────────────
-         5 cm red cube sitting on the table top (z = 0.30 + 0.025 = 0.325).
+         5 cm red cube sitting on the table top (z = 0.50 + 0.025 = 0.525).
          Static (welded to world) — acts as the policy's visual target.
          To make it dynamic/graspable, add <joint type="free"/> inside.
     ──────────────────────────────────────────────────────────────────── -->
     <!-- Table top at z=0.50, cube half-size=0.025 → resting centre z=0.525.
-         Start at z=0.55 so it drops onto the table at episode reset. -->
-    <body name="target_cube" pos="0.65 -0.20 0.55">
+         Rests on table top: table z=0.475, top half=0.025, cube half=0.025 → z=0.525. -->
+    <body name="target_cube" pos="0.65 -0.20 0.525">
       <!-- Free joint lets the cube be pushed by the arm -->
       <joint name="cube_free" type="free"/>
       <inertial pos="0 0 0" mass="0.050" diaginertia="2e-5 2e-5 2e-5"/>
+      <!-- cube(4,5): collides with arm(contype=2 matches conaffinity=5 bit0? no.
+           arm(2,4) vs cube(4,5): (2&5)|(4&4)=0|4=4 ✓  cube-table: (4&4)|(1&5)=4|1 ✓ -->
       <geom name="cube" type="box" size="0.025 0.025 0.025"
-            rgba="0.9 0.1 0.1 1" contype="1" conaffinity="1"
+            rgba="0.9 0.1 0.1 1" contype="4" conaffinity="5"
             friction="0.6 0.1 0.1"/>
     </body>
 
@@ -125,7 +133,8 @@
         <inertial pos="0 0 0" mass="35.336455"
                   fullinertia="1.849155 1.662671 0.802239 -0.000354 -0.154188 0.003292"/>
         <geom class="visual"    name="torso_v" type="mesh" mesh="torso_mesh" rgba="0.5 0.1 0.1 1"/>
-        <geom class="collision" name="torso_c" type="box"  size="0.15 0.15 0.5" pos="0 0 0.35"/>
+        <geom class="collision" name="torso_c" type="box"  size="0.15 0.15 0.5" pos="0 0 0.35"
+              contype="0" conaffinity="0"/>
 
         <!-- Pedestal: fixed sub-body of torso -->
         <body name="pedestal" pos="0 0 0">
@@ -359,31 +368,32 @@
   <!-- ================================================================
     ACTUATORS — velocity-controlled, one per DOF.
 
-    kv (Nm·s/rad): approximate servo stiffness.
-    ctrlrange: max joint velocity command (rad/s), matching URDF velocity limits.
+    kv (Nm·s/rad): servo stiffness. Shoulder/elbow kv=30 with ctrlrange=±3.0 so max
+    force=90 Nm comfortably exceeds max gravity torque (~31 Nm at s1=1.04), leaving
+    ~2 rad/s headroom for feedback. Wrist joints kv=10, ctrlrange=±4.0.
     Order matches qpos: head_pan, right arm (s0..w2), left arm (s0..w2).
   ================================================================ -->
   <actuator>
     <!-- Head -->
     <velocity name="head_pan_v"  joint="head_pan"  kv="5"  ctrlrange="-1.0 1.0"/>
 
-    <!-- Right arm — shoulder/elbow: vel≤1.5 rad/s; wrist: vel≤4.0 rad/s -->
-    <velocity name="right_s0_v"  joint="right_s0"  kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="right_s1_v"  joint="right_s1"  kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="right_e0_v"  joint="right_e0"  kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="right_e1_v"  joint="right_e1"  kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="right_w0_v"  joint="right_w0"  kv="5"  ctrlrange="-4.0 4.0"/>
-    <velocity name="right_w1_v"  joint="right_w1"  kv="5"  ctrlrange="-4.0 4.0"/>
-    <velocity name="right_w2_v"  joint="right_w2"  kv="5"  ctrlrange="-4.0 4.0"/>
+    <!-- Right arm — shoulder/elbow: kv=30, ctrlrange=±3.0 (90 Nm max > 31 Nm gravity); wrist: kv=10 -->
+    <velocity name="right_s0_v"  joint="right_s0"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_s1_v"  joint="right_s1"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_e0_v"  joint="right_e0"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_e1_v"  joint="right_e1"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_w0_v"  joint="right_w0"  kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="right_w1_v"  joint="right_w1"  kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="right_w2_v"  joint="right_w2"  kv="10" ctrlrange="-4.0 4.0"/>
 
     <!-- Left arm -->
-    <velocity name="left_s0_v"   joint="left_s0"   kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="left_s1_v"   joint="left_s1"   kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="left_e0_v"   joint="left_e0"   kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="left_e1_v"   joint="left_e1"   kv="10" ctrlrange="-1.5 1.5"/>
-    <velocity name="left_w0_v"   joint="left_w0"   kv="5"  ctrlrange="-4.0 4.0"/>
-    <velocity name="left_w1_v"   joint="left_w1"   kv="5"  ctrlrange="-4.0 4.0"/>
-    <velocity name="left_w2_v"   joint="left_w2"   kv="5"  ctrlrange="-4.0 4.0"/>
+    <velocity name="left_s0_v"   joint="left_s0"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_s1_v"   joint="left_s1"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_e0_v"   joint="left_e0"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_e1_v"   joint="left_e1"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_w0_v"   joint="left_w0"   kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="left_w1_v"   joint="left_w1"   kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="left_w2_v"   joint="left_w2"   kv="10" ctrlrange="-4.0 4.0"/>
   </actuator>
 
   <!-- ================================================================
@@ -399,7 +409,7 @@
   <keyframe>
     <!-- qpos order: cube_free(7) head(1) right_arm(7) left_arm(7) = 22 total -->
     <key name="home"
-         qpos="0.65 -0.20 0.55 1 0 0 0   0   0 -0.9599 0 2.0 0 0.7854 0   0 -0.9599 0 2.0 0 0.7854 0"/>
+         qpos="0.65 -0.20 0.525 1 0 0 0   0   0 -0.9599 0 2.0 0 0.7854 0   0 -0.9599 0 2.0 0 0.7854 0"/>
   </keyframe>
 
 </mujoco>

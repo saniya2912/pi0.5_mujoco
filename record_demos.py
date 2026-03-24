@@ -2,21 +2,30 @@
 
 Controller strategy
 -------------------
-The right arm is driven **kinematically** (qpos set directly each step).
-This bypasses gravity issues with the weak velocity actuators and gives
-perfectly smooth, reproducible trajectories.
+The right arm is driven with a **proportional velocity controller + gravity
+compensation** (d.ctrl).  A target joint configuration is interpolated each
+control step.  The P-gain (CTRL_GAIN=6) converts position error to a velocity
+command; a feedforward term (+qfrc_bias/kv) cancels gravity/Coriolis so the
+arm holds position accurately.  N_SUBSTEPS=5 physics steps are taken per
+control step (10 ms effective period at dt=2 ms).
+
+Dynamics: M*qacc = kv*(ctrl-qvel) - qfrc_bias
+  → hold condition: ctrl = qfrc_bias/kv  (positive feedforward sign)
 
 The cube is fully dynamic — it responds to contact forces from the arm.
+The arm passes through the table geometry during approach (arm contype=2
+only collides with cube contype=4; table contype=1 has conaffinity=4 which
+doesn't match arm contype=2).
 
 Pipeline per episode
 --------------------
-  Phase 0a  s0 sweep (arm folded) : move s0 from home→approach while joints 1-6
-                                    stay at HOME values; endpoint stays far from cube
+  Phase 0a  s0 sweep (arm folded) : move s0 from home→approach (300 steps)
+                                    while joints 1-6 stay at HOME
   Phase 0b  arm extension         : interpolate joints 1-6 from HOME→APPROACH_BASE
-                                    at fixed s0_approach; arm descends toward workspace
+                                    at fixed s0_approach (400 steps)
   Phase 1   push                  : sweep s0 from approach → past cube in -Y
 
-Recorded actions = implied joint velocities (Δqpos/dt), clipped to ctrlrange.
+Recorded actions = actual velocity commands (d.ctrl[RIGHT_CTRL]), clipped to ctrlrange.
 
 Language instruction: "move the cube to the right"
 
@@ -28,7 +37,7 @@ Each HDF5 contains:
   observations/image        (T, 3, 224, 224) uint8
   observations/wrist_image  (T, 3, 224, 224) uint8
   observations/state        (T, 7)           float32  right arm qpos
-  actions                   (T, 7)           float32  right arm Δqpos/dt
+  actions                   (T, 7)           float32  velocity commands (d.ctrl)
   metadata/success, episode_length, cube_start_pos, language_instruction
 
 Usage
@@ -60,6 +69,11 @@ IMG_H, IMG_W = 224, 224
 RIGHT_QPOS = slice(8, 15)   # in d.qpos
 RIGHT_CTRL = slice(1, 8)    # in d.ctrl
 
+# Left arm slices — held at HOME throughout to prevent sag affecting right arm dynamics
+LEFT_QPOS  = slice(15, 22)  # in d.qpos
+LEFT_CTRL  = slice(8, 15)   # in d.ctrl
+KV_LEFT    = np.array([30., 30., 30., 30., 10., 10., 10.])
+
 DT = 0.002   # simulation timestep
 
 # ── Keyframe configs (right arm: s0 s1 e0 e1 w0 w1 w2) ──────────────────────
@@ -75,16 +89,26 @@ BASE_Y   = -0.111   # ep_y at BASE_S0 with other joints = APPROACH_BASE[1:]
 DY_DS0   =  0.593   # ∂ep_y/∂s0 (from FK scan, constant while other joints fixed)
 
 # Cube defaults
-CUBE_DEFAULT = np.array([0.65, -0.20, 0.55])
+CUBE_DEFAULT = np.array([0.65, -0.20, 0.525])
 CUBE_RAND_XY = 0.04   # ±4 cm in Y only (X fixed — arm aligns with cube in X)
 
-# Episode timing
-REACH_STEPS_A = 200   # phase 0a: sweep s0 with arm folded (HOME joints 1-6)
-REACH_STEPS_B = 300   # phase 0b: extend arm at fixed s0_approach
-PUSH_STEPS    = 600   # max steps for push sweep (phase 1)
-MAX_STEPS     = REACH_STEPS_A + REACH_STEPS_B + PUSH_STEPS
+# Dynamic controller
+N_SUBSTEPS = 5      # physics steps per control step
+CTRL_GAIN  = 6.0    # P-gain: velocity = gain × position error (rad/s per rad)
+NOISE_STD  = 0.01   # Gaussian noise std added to velocity commands
 
-PUSH_RATE     = -0.003  # Δs0 per step during push (≈ -1.5 rad/s at dt=0.002)
+# Actuator gains for right arm joints (from baxter.xml: kv=30 shoulder/elbow, kv=10 wrist)
+# ctrlrange for shoulder/elbow = ±3.0 rad/s (max 90 Nm > ~31 Nm peak gravity torque)
+# Used to convert gravity torques (N·m) → velocity feedforward (rad/s)
+KV_RIGHT = np.array([30., 30., 30., 30., 10., 10., 10.])
+
+# Episode timing (control steps; each takes N_SUBSTEPS physics steps)
+REACH_STEPS_A = 300   # phase 0a: sweep s0 with arm folded (HOME joints 1-6)
+REACH_STEPS_B = 400   # phase 0b: extend arm at fixed s0_approach
+PUSH_STEPS    = 600   # max control steps for push sweep (phase 1)
+MAX_STEPS     = REACH_STEPS_A + REACH_STEPS_B + PUSH_STEPS  # 1300
+
+PUSH_RATE     = -0.003  # Δs0 per control step during push
 
 SUCCESS_DIST  = 0.06   # m  cube must move in -Y to count as success
 
@@ -103,10 +127,44 @@ def get_cube_pos(m, d) -> np.ndarray:
     return d.xpos[bid].copy()
 
 
-def set_arm_kinematic(d, qpos_right: np.ndarray) -> None:
-    """Directly set right arm qpos and zero its velocity (kinematic step)."""
-    d.qpos[RIGHT_QPOS] = qpos_right
-    d.qvel[7:14] = 0.0
+def joint_vel_toward(d, target_qpos: np.ndarray, gain: float = CTRL_GAIN) -> np.ndarray:
+    """P controller + gravity compensation.
+
+    feedback    = gain × (target - current)   [rad/s]
+    feedforward = +qfrc_bias[right_arm] / kv  [cancel gravity/Coriolis]
+
+    MuJoCo dynamics: M*qacc = τ_actuator - qfrc_bias
+    → to hold (qacc=0): τ = qfrc_bias → ctrl = +qfrc_bias/kv
+
+    kv=30, ctrlrange=±3.0 → max force 90 Nm >> max gravity torque ~31 Nm.
+    """
+    feedback    = gain * (target_qpos - d.qpos[RIGHT_QPOS])
+    feedforward = d.qfrc_bias[7:14] / KV_RIGHT   # +sign: cancel gravity/Coriolis
+    return feedback + feedforward
+
+
+def _apply_ctrl(m, d, dq: np.ndarray) -> np.ndarray:
+    """Add noise, clip to actuator limits, write to d.ctrl. Returns the clipped command.
+
+    Also applies gravity-compensated position hold to the left arm so its sag
+    does not create inertial coupling forces on the right arm.
+    """
+    ctrl_min = m.actuator_ctrlrange[RIGHT_CTRL, 0]
+    ctrl_max = m.actuator_ctrlrange[RIGHT_CTRL, 1]
+    dq = dq + np.random.normal(0, NOISE_STD, size=7)
+    dq_clipped = np.clip(dq, ctrl_min, ctrl_max)
+
+    # Left arm: gravity-compensated hold at HOME (no noise, no recording)
+    left_fb = CTRL_GAIN * (HOME - d.qpos[LEFT_QPOS])
+    left_ff = d.qfrc_bias[14:21] / KV_LEFT
+    left_ctrl_min = m.actuator_ctrlrange[LEFT_CTRL, 0]
+    left_ctrl_max = m.actuator_ctrlrange[LEFT_CTRL, 1]
+    left_dq = np.clip(left_fb + left_ff, left_ctrl_min, left_ctrl_max)
+
+    d.ctrl[:] = 0.0
+    d.ctrl[RIGHT_CTRL] = dq_clipped
+    d.ctrl[LEFT_CTRL]  = left_dq
+    return dq_clipped
 
 
 # ---------------------------------------------------------------------------
@@ -124,10 +182,12 @@ def reset_episode(m, d, rng) -> np.ndarray:
     d.qvel[:] = 0.0
     mujoco.mj_forward(m, d)
 
-    # Let cube settle on table (arm stays at home kinematically)
+    # Let cube settle on table while holding arm at HOME with velocity control
     for _ in range(60):
-        set_arm_kinematic(d, HOME)
-        mujoco.mj_step(m, d)
+        dq = joint_vel_toward(d, HOME)
+        _apply_ctrl(m, d, dq)
+        for _ in range(N_SUBSTEPS):
+            mujoco.mj_step(m, d)
 
     return get_cube_pos(m, d).copy()
 
@@ -155,7 +215,6 @@ def run_episode(m, d, rng, renderer, viewer=None) -> dict | None:
     # Endpoint stays at x ≈ -0.05 to -0.16, far from cube at x ≈ 0.65
     obs_imgs, obs_wrists, obs_states, obs_actions = [], [], [], []
 
-    prev_qpos = HOME.copy()
     for t in range(REACH_STEPS_A):
         if viewer is not None and not viewer.is_running():
             return None
@@ -163,14 +222,15 @@ def run_episode(m, d, rng, renderer, viewer=None) -> dict | None:
         alpha = (t + 1) / REACH_STEPS_A
         target = HOME.copy()
         target[0] = (1.0 - alpha) * HOME[0] + alpha * s0_approach
-        set_arm_kinematic(d, target)
-        mujoco.mj_step(m, d)
+
+        dq = joint_vel_toward(d, target)
+        ctrl = _apply_ctrl(m, d, dq)
+        for _ in range(N_SUBSTEPS):
+            mujoco.mj_step(m, d)
         if viewer is not None:
             viewer.sync()
 
-        implied_vel = (target - prev_qpos) / DT
-        _record(renderer, d, implied_vel, obs_imgs, obs_wrists, obs_states, obs_actions)
-        prev_qpos = target.copy()
+        _record(renderer, d, ctrl, obs_imgs, obs_wrists, obs_states, obs_actions)
 
     # ── Phase 0b: extend arm at fixed s0_approach (HOME[1:] → APPROACH_BASE[1:]) ──
     # Arm descends toward workspace; stays >8 cm from cube in XY until final position
@@ -180,44 +240,40 @@ def run_episode(m, d, rng, renderer, viewer=None) -> dict | None:
 
         alpha = (t + 1) / REACH_STEPS_B
         target = approach_config.copy()
-        # Interpolate joints 1-6 from HOME to APPROACH_BASE; s0 is fixed at s0_approach
         target[1:] = (1.0 - alpha) * HOME[1:] + alpha * approach_config[1:]
-        set_arm_kinematic(d, target)
-        mujoco.mj_step(m, d)
+
+        dq = joint_vel_toward(d, target)
+        ctrl = _apply_ctrl(m, d, dq)
+        for _ in range(N_SUBSTEPS):
+            mujoco.mj_step(m, d)
         if viewer is not None:
             viewer.sync()
 
-        implied_vel = (target - prev_qpos) / DT
-        _record(renderer, d, implied_vel, obs_imgs, obs_wrists, obs_states, obs_actions)
-        prev_qpos = target.copy()
+        _record(renderer, d, ctrl, obs_imgs, obs_wrists, obs_states, obs_actions)
 
     # ── Phase 1: sweep s0 from approach → push end ───────────────────────────
     current_s0 = s0_approach
-    s0_step = PUSH_RATE   # Δs0 per step (constant rate)
 
     for t in range(PUSH_STEPS):
         if viewer is not None and not viewer.is_running():
             return None
 
-        current_s0 = max(current_s0 + s0_step, s0_push_end)
+        current_s0 = max(current_s0 + PUSH_RATE, s0_push_end)
         target = approach_config.copy()
         target[0] = current_s0
-        set_arm_kinematic(d, target)
-        mujoco.mj_step(m, d)
+
+        dq = joint_vel_toward(d, target)
+        ctrl = _apply_ctrl(m, d, dq)
+        for _ in range(N_SUBSTEPS):
+            mujoco.mj_step(m, d)
         if viewer is not None:
             viewer.sync()
 
-        implied_vel = np.zeros(7)
-        implied_vel[0] = s0_step / DT   # only s0 moves
-        _record(renderer, d, implied_vel, obs_imgs, obs_wrists, obs_states, obs_actions)
-        prev_qpos = target.copy()
+        _record(renderer, d, ctrl, obs_imgs, obs_wrists, obs_states, obs_actions)
 
-        # Early success
         cube_now = get_cube_pos(m, d)
-        y_moved = cube_start[1] - cube_now[1]
-        if y_moved >= SUCCESS_DIST:
+        if cube_start[1] - cube_now[1] >= SUCCESS_DIST:
             break
-
         if current_s0 <= s0_push_end:
             break
 
