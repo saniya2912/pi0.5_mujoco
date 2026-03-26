@@ -112,7 +112,7 @@
     ──────────────────────────────────────────────────────────────────── -->
     <!-- Table top at z=0.50, cube half-size=0.025 → resting centre z=0.525.
          Rests on table top: table z=0.475, top half=0.025, cube half=0.025 → z=0.525. -->
-    <body name="target_cube" pos="0.65 -0.20 0.525">
+    <body name="target_cube" pos="0.65 -0.40 0.525">
       <!-- Free joint lets the cube be pushed by the arm -->
       <joint name="cube_free" type="free"/>
       <inertial pos="0 0 0" mass="0.050" diaginertia="2e-5 2e-5 2e-5"/>
