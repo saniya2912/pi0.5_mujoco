@@ -1,0 +1,604 @@
+<!-- ============================================================================
+  baxter_withgripper.xml — MuJoCo MJCF for Baxter robot with Rethink parallel-jaw grippers
+
+  Base model : baxter.xml (converted from Rethink Robotics URDF)
+  Grippers   : Rethink Electric Parallel Jaw Gripper (from robosuite)
+
+  Joint tree  (depth-first qpos order):
+    [0]  head_pan
+    [1]  right_s0  [2] right_s1  [3] right_e0  [4] right_e1
+    [5]  right_w0  [6] right_w1  [7] right_w2
+    [8]  right_l_finger_joint  [9]  right_r_finger_joint
+    [10] left_s0  [11] left_s1  [12] left_e0  [13] left_e1
+    [14] left_w0  [15] left_w1  [16] left_w2
+    [17] left_l_finger_joint   [18] left_r_finger_joint
+
+  Actuators: velocity-controlled for arm joints (kv=30/10);
+             position-controlled for gripper joints (kp=1000, ±20 N).
+  Cameras  : head_camera, right_hand_camera, left_hand_camera.
+  Keyframe : "home" — natural bent-arm pose, both grippers fully open.
+============================================================================ -->
+<mujoco model="baxter_withgripper">
+
+  <!-- meshdir is relative to the location of this XML file (models/) -->
+  <compiler meshdir="meshes" angle="radian" autolimits="true"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="RK4"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+  </visual>
+
+  <default>
+    <!-- Default joint: light armature for stability -->
+    <joint damping="0.7" armature="0.01"/>
+    <!-- Visual geoms: no collision -->
+    <default class="visual">
+      <geom contype="0" conaffinity="0"/>
+    </default>
+    <!-- Collision geoms: participate in contact -->
+    <default class="collision">
+      <!-- Arm/head geoms: contype=2 (arm), conaffinity=4 (objects only).
+           Collision rules (A·B iff (A.type&B.aff)|(B.type&A.aff) != 0):
+             arm(2,4) vs arm(2,4)   → (2&4)|(2&4)=0  — no arm self-collision
+             arm(2,4) vs table(1,4) → (2&4)|(1&4)=0  — arm passes through table
+             arm(2,4) vs cube(4,5)  → (2&5)|(4&4)=4  — arm hits cube  ✓
+      -->
+      <geom contype="2" conaffinity="4" rgba="0.4 0.4 0.4 0"/>
+    </default>
+    <!-- Finger collision geoms: contype=2, conaffinity=5
+         finger(2,5) vs cube(4,5)  → (2&5)|(4&5)=0|4=4  — fingers hit cube  ✓
+         finger(2,5) vs table(1,4) → (2&4)|(1&5)=0|1=1  — fingers rest on table ✓
+         finger(2,5) vs floor(1,4) → (2&4)|(1&5)=0|1=1  — fingers rest on floor ✓
+         finger(2,5) vs arm(2,4)   → (2&4)|(2&5)=0|0=0  — no arm self-collision ✓
+    -->
+    <default class="finger_col">
+      <geom contype="2" conaffinity="5" rgba="0.1 0.1 0.1 0" friction="0.8 0.1 0.1"/>
+    </default>
+  </default>
+
+  <!-- ================================================================
+    ASSETS — STL/OBJ meshes + gripper materials
+  ================================================================ -->
+  <asset>
+    <!-- Baxter arm meshes -->
+    <mesh name="torso_mesh"    file="torso/base_link.STL"         scale="1 1 1"/>
+    <mesh name="pedestal_mesh" file="base/PEDESTAL.STL"           scale="1 1 1"/>
+    <mesh name="head_mesh"     file="head/H0.STL"                 scale="1 1 1"/>
+    <mesh name="S0"            file="upper_shoulder/S0.STL"       scale="1 1 1"/>
+    <mesh name="S1"            file="lower_shoulder/S1.STL"       scale="1 1 1"/>
+    <mesh name="E0"            file="upper_elbow/E0.STL"          scale="1 1 1"/>
+    <mesh name="E1"            file="lower_elbow/E1.STL"          scale="1 1 1"/>
+    <mesh name="W0"            file="upper_forearm/W0.STL"        scale="1 1 1"/>
+    <mesh name="W1"            file="lower_forearm/W1.STL"        scale="1 1 1"/>
+    <mesh name="W2"            file="wrist/W2.STL"                scale="1 1 1"/>
+
+    <!-- Rethink parallel-jaw gripper meshes -->
+    <mesh name="standard_narrow"        file="rethink_gripper/standard_narrow.stl"/>
+    <mesh name="half_round_tip"         file="rethink_gripper/half_round_tip.stl"/>
+    <mesh name="electric_gripper_base_0" file="rethink_gripper/electric_gripper_base_0.obj"/>
+    <mesh name="electric_gripper_base_1" file="rethink_gripper/electric_gripper_base_1.obj"/>
+    <mesh name="connector_plate"        file="rethink_gripper/connector_plate.obj"/>
+
+    <!-- Gripper materials -->
+    <material name="gripper_mat_dark"   specular="0.5" shininess="0.25" rgba="0.001651 0.001651 0.001651 1"/>
+    <material name="gripper_mat_red"    specular="0.5" shininess="0.25" rgba="0.64 0.00 0.00 1"/>
+    <material name="gripper_mat_grey"   specular="0.5" shininess="0.25" rgba="0.64 0.64 0.64 1"/>
+    <material name="finger_mat"         specular="0.5" shininess="0.25" rgba="0.00 0.00 0.00 1"/>
+  </asset>
+
+  <!-- ================================================================
+    WORLDBODY
+  ================================================================ -->
+  <worldbody>
+
+    <!-- ── SCENE CAMERA (world-fixed) ────────────────────────────────────────
+         Positioned to the front-right of the workspace, elevated.
+         Gives a clear view of the robot, table, and target cube at all times.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <body name="scene_camera_body" pos="1.0 -1.2 1.2">
+      <camera name="scene_camera" xyaxes="0.832 0.555 0  -0.400 0.600 0.693" fovy="55"/>
+    </body>
+
+    <!-- Lighting -->
+    <light pos="0 0 4"   dir="0 0 -1"    diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" castshadow="true"/>
+    <light pos="2 2 3"   dir="-1 -1 -1"  diffuse="0.5 0.5 0.5" castshadow="false"/>
+
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="5 5 0.1" rgba="0.75 0.75 0.75 1"
+          pos="0 0 -0.93" contype="1" conaffinity="4" friction="0.8 0.1 0.1"/>
+
+    <!-- ── TABLE ─────────────────────────────────────────────────────────
+         Table top at z = 0.50 m.  Body centre at z=0.475.
+    ──────────────────────────────────────────────────────────────────── -->
+    <body name="table" pos="0.65 -0.20 0.475">
+      <geom name="table_top"  type="box" size="0.25 0.25 0.025"
+            rgba="0.55 0.40 0.25 1" contype="1" conaffinity="4"
+            friction="0.8 0.1 0.1"/>
+      <geom name="table_leg1" type="cylinder" size="0.02 0.69"
+            pos=" 0.22  0.22 -0.715" rgba="0.45 0.30 0.20 1"
+            contype="0" conaffinity="0"/>
+      <geom name="table_leg2" type="cylinder" size="0.02 0.69"
+            pos="-0.22  0.22 -0.715" rgba="0.45 0.30 0.20 1"
+            contype="0" conaffinity="0"/>
+      <geom name="table_leg3" type="cylinder" size="0.02 0.69"
+            pos=" 0.22 -0.22 -0.715" rgba="0.45 0.30 0.20 1"
+            contype="0" conaffinity="0"/>
+      <geom name="table_leg4" type="cylinder" size="0.02 0.69"
+            pos="-0.22 -0.22 -0.715" rgba="0.45 0.30 0.20 1"
+            contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ── TARGET CUBE ───────────────────────────────────────────────────
+         5 cm red cube sitting on the table top (z = 0.525).
+         Free joint makes it graspable / pushable.
+    ──────────────────────────────────────────────────────────────────── -->
+    <body name="target_cube" pos="0.65 -0.40 0.525">
+      <joint name="cube_free" type="free"/>
+      <inertial pos="0 0 0" mass="0.050" diaginertia="2e-5 2e-5 2e-5"/>
+      <geom name="cube" type="box" size="0.025 0.025 0.025"
+            rgba="0.9 0.1 0.1 1" contype="4" conaffinity="5"
+            friction="0.6 0.1 0.1"/>
+    </body>
+
+    <!-- ── BASE / TORSO ─────────────────────────────────────────── -->
+    <body name="base" pos="0 0 0">
+      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-6 1e-6 1e-6"/>
+
+      <body name="torso" pos="0 0 0">
+        <inertial pos="0 0 0" mass="35.336455"
+                  fullinertia="1.849155 1.662671 0.802239 -0.000354 -0.154188 0.003292"/>
+        <geom class="visual"    name="torso_v" type="mesh" mesh="torso_mesh" rgba="0.5 0.1 0.1 1"/>
+        <geom class="collision" name="torso_c" type="box"  size="0.15 0.15 0.5" pos="0 0 0.35"
+              contype="0" conaffinity="0"/>
+
+        <body name="pedestal" pos="0 0 0">
+          <inertial pos="0 0 0" mass="60.86397744"
+                    fullinertia="5.0635929 6.08689388 4.96191932 0.00103417 0.80199628 0.00105311"/>
+          <geom class="visual"    name="pedestal_v" type="mesh" mesh="pedestal_mesh" rgba="0.2 0.2 0.2 1"/>
+          <geom class="collision" name="pedestal_c" type="cylinder" size="0.20 0.465" pos="0 0 -0.465"/>
+        </body>
+
+        <!-- ── HEAD ─────────────────────────────────────────────── -->
+        <body name="head" pos="0.06 0 0.686">
+          <inertial pos="0 0 0" mass="0.547767"
+                    fullinertia="0.004641 0.003295 0.003415 0.000159 0.000242 -0.001324"/>
+          <geom class="visual"    name="head_v" type="mesh" mesh="head_mesh" rgba="0.2 0.2 0.2 1"/>
+          <geom class="collision" name="head_c" type="sphere" size="0.15" pos="-0.07 0 0.05"/>
+          <joint name="head_pan" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+
+          <body name="head_camera_body" pos="0.12839 0 0.06368" euler="1.75057 0 1.5708">
+            <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
+            <camera name="head_camera" pos="0 0 0" fovy="60"/>
+          </body>
+        </body>
+
+        <!-- ============================================================
+          RIGHT ARM
+        ============================================================ -->
+        <body name="right_arm_mount" pos="0.024645 -0.219645 0.118588" euler="0 0 -0.7854">
+          <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
+
+          <body name="right_upper_shoulder" pos="0.055695 0 0.011038">
+            <inertial pos="0.01783 0.00086 0.19127" mass="5.70044"
+                      fullinertia="0.04709102262 0.03766976455 0.03595988478
+                                   0.00012787556  0.00614870039  0.00078086899"/>
+            <geom class="visual"    name="rus_v" type="mesh"     mesh="S0"    rgba="0.5 0.1 0.1 1"/>
+            <geom class="collision" name="rus_c" type="cylinder" size="0.06 0.1361" pos="0 0 0.1361"/>
+            <joint name="right_s0" type="hinge" axis="0 0 1" range="-1.7017 1.7017"/>
+
+            <body name="right_lower_shoulder" pos="0.069 0 0.27035" euler="-1.5708 0 0">
+              <inertial pos="0.06845 0.00269 -0.00529" mass="3.22698"
+                        fullinertia="0.01175209419 0.0278859752 0.02078749298
+                                     -0.00030096398 0.00207675762 -0.00018821993"/>
+              <geom class="visual"    name="rls_v" type="mesh"     mesh="S1"  rgba="0.5 0.1 0.1 1"/>
+              <geom class="collision" name="rls_c" type="cylinder" size="0.06 0.06"/>
+              <joint name="right_s1" type="hinge" axis="0 0 1" range="-2.147 1.047"/>
+
+              <body name="right_upper_elbow" pos="0.102 0 0" euler="1.5708 0 1.5708">
+                <inertial pos="-0.00276 0.00132 0.18086" mass="4.31272"
+                          fullinertia="0.02661733557 0.02844355207 0.01248008322
+                                       0.00029270634  0.00392189887  0.0010838933"/>
+                <geom class="visual"    name="rue_v" type="mesh"     mesh="E0"  rgba="0.5 0.1 0.1 1"/>
+                <geom class="collision" name="rue_c" type="cylinder" size="0.06 0.0535" pos="0 0 -0.0535"/>
+                <joint name="right_e0" type="hinge" axis="0 0 1" range="-3.0542 3.0542"/>
+
+                <body name="right_lower_elbow" pos="0.069 0 0.26242" euler="-1.5708 -1.5708 0">
+                  <inertial pos="0.02611 0.00159 -0.01117" mass="2.07206"
+                            fullinertia="0.00711582686 0.01318227876 0.00926852064
+                                         0.00036036173  0.0007459496  -0.00019663418"/>
+                  <geom class="visual"    name="rle_v" type="mesh"     mesh="E1"  rgba="0.5 0.1 0.1 1"/>
+                  <geom class="collision" name="rle_c" type="cylinder" size="0.06 0.05"/>
+                  <joint name="right_e1" type="hinge" axis="0 0 1" range="-0.05 2.618"/>
+
+                  <body name="right_upper_forearm" pos="0.10359 0 0" euler="1.5708 0 1.5708">
+                    <inertial pos="-0.00168 0.0046 0.13952" mass="2.24665"
+                              fullinertia="0.01667742825 0.01675457264 0.0037463115
+                                           0.00018403705  0.00018657629 -0.00064732352"/>
+                    <geom class="visual"    name="ruf_v" type="mesh"     mesh="W0"  rgba="0.5 0.1 0.1 1"/>
+                    <geom class="collision" name="ruf_c" type="cylinder" size="0.06 0.044" pos="0 0 -0.044"/>
+                    <joint name="right_w0" type="hinge" axis="0 0 1" range="-3.059 3.059"/>
+
+                    <body name="right_lower_forearm" pos="0.01 0 0.2707" euler="-1.5708 -1.5708 0">
+                      <inertial pos="0.06041 0.00697 0.006" mass="1.60979"
+                                fullinertia="0.00387607152 0.00700537914 0.0055275524
+                                             -0.00044384784 -0.00021115038  0.00015348067"/>
+                      <geom class="visual"    name="rlf_v" type="mesh"     mesh="W1"  rgba="0.5 0.1 0.1 1"/>
+                      <geom class="collision" name="rlf_c" type="cylinder" size="0.06 0.05"/>
+                      <joint name="right_w1" type="hinge" axis="0 0 1" range="-1.5708 2.094"/>
+
+                      <body name="right_wrist" pos="0.115975 0 0" euler="1.5708 0 1.5708">
+                        <inertial pos="0.00198 0.00125 0.01855" mass="0.35093"
+                                  fullinertia="0.00025289155 0.0002688601 0.0003074118
+                                               0.00000575311 -0.00000159345 -0.00000519818"/>
+                        <geom class="visual"    name="rwr_v" type="mesh"     mesh="W2"  rgba="0.1 0.1 0.1 1"/>
+                        <geom class="collision" name="rwr_c" type="cylinder" size="0.06 0.0825"/>
+                        <joint name="right_w2" type="hinge" axis="0 0 1" range="-3.059 3.059"/>
+
+                        <body name="right_hand" pos="0 0 0.11355">
+                          <inertial pos="0.01093 0.00042 -0.01532" mass="0.19125"
+                                    fullinertia="0.00017588 0.00021166377 0.00023745397
+                                                 0.00000147073  0.0000243633  0.00000172689"/>
+                          <geom class="collision" name="rhand_c" type="cylinder"
+                                size="0.04 0.0232" pos="0 0 -0.0232"/>
+
+                          <body name="right_hand_camera_body"
+                                pos="0.06 0 0.04" euler="0 1.5708 0">
+                            <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
+                            <camera name="right_hand_camera" fovy="90"/>
+                          </body>
+
+                          <!-- ── RIGHT GRIPPER (Rethink Electric Parallel Jaw) ──────────── -->
+                          <body name="right_gripper" pos="0 0 0.025">
+                            <inertial pos="0 0 0" quat="-0.5 0.5 0.5 0.5" mass="0.3"
+                                      diaginertia="3e-08 2e-08 2e-08"/>
+                            <site name="right_ft_frame" pos="0 0 0" size="0.01" rgba="1 0 0 1"
+                                  type="sphere" group="1"/>
+                            <!-- Visual meshes -->
+                            <geom class="visual" name="rgrip_connector_v"
+                                  type="mesh" mesh="connector_plate" material="gripper_mat_dark"
+                                  pos="0 0 0.0018" quat="0.7071068 0 0 0.7071068"/>
+                            <geom class="visual" name="rgrip_base0_v"
+                                  type="mesh" mesh="electric_gripper_base_0" material="gripper_mat_grey"
+                                  pos="0 0 0.0194" quat="0.7071068 0 0 0.7071068"/>
+                            <geom class="visual" name="rgrip_base1_v"
+                                  type="mesh" mesh="electric_gripper_base_1" material="gripper_mat_red"
+                                  pos="0 0 0.0194" quat="0.7071068 0 0 0.7071068"/>
+                            <!-- Gripper body collision (cylinder, arm-like: contype=2, conaffinity=4) -->
+                            <geom name="rgrip_base_c" type="cylinder" size="0.029 0.05"
+                                  pos="0.004 0.0 0.04" quat="0 0 0.707107 0.707107"
+                                  contype="2" conaffinity="4" rgba="0.3 0.3 0.3 0"/>
+
+                            <!-- End-effector frame -->
+                            <body name="right_gripper_eef" pos="0 0 0.109" quat="0.707105 0 0 -0.707105">
+                              <site name="right_grip_site" pos="0 0 0" size="0.01" rgba="1 0 0 0.5"
+                                    type="sphere" group="1"/>
+                            </body>
+
+                            <!-- Left finger (positive-Y side) -->
+                            <body name="right_l_finger" pos="0 0.01 0.0444">
+                              <inertial pos="0 0 0" quat="0 0 0 -1" mass="0.02"
+                                        diaginertia="0.01 0.01 0.01"/>
+                              <joint name="right_l_finger_joint" pos="0 0 0" axis="0 1 0"
+                                     type="slide" range="-0.0115 0.020833"
+                                     damping="100" armature="1.0" frictionloss="1.0"/>
+                              <!-- Visual -->
+                              <geom class="visual" name="right_l_finger_v"
+                                    type="mesh" mesh="standard_narrow" material="finger_mat"
+                                    quat="0 0 0 -1"/>
+                              <!-- Collision geoms: finger_col class (contype=2, conaffinity=5) -->
+                              <geom class="finger_col" name="right_l_finger_g0"
+                                    type="box" size="0.005 0.00675 0.0375"
+                                    pos="0 0.01725 0.04" quat="0 0 0 -1"/>
+                              <geom class="finger_col" name="right_l_finger_g1"
+                                    type="box" size="0.005 0.025 0.0085"
+                                    pos="-0.005 -0.003 0.0083" quat="0 0 0 -1"/>
+                              <body name="right_l_finger_tip" pos="0 0.01725 0.075">
+                                <inertial pos="0 0 0" quat="0 0 0 1" mass="0.01"
+                                          diaginertia="0.01 0.01 0.01"/>
+                                <geom class="visual" name="right_l_fingertip_v"
+                                      type="mesh" mesh="half_round_tip" material="finger_mat"
+                                      quat="0 0 0 1"/>
+                                <geom class="finger_col" name="right_l_fingertip_g0"
+                                      type="box" size="0.004 0.004 0.0185"
+                                      pos="0 -0.0045 -0.015" quat="0 0 0 -1"/>
+                                <geom class="finger_col" name="right_l_fingerpad_g0"
+                                      type="box" size="0.0035 0.004 0.0165"
+                                      pos="0 -0.0047 -0.017"/>
+                              </body>
+                            </body><!-- /right_l_finger -->
+
+                            <!-- Right finger (negative-Y side) -->
+                            <body name="right_r_finger" pos="0 -0.01 0.0444">
+                              <inertial pos="0 0 0" mass="0.02" diaginertia="0.01 0.01 0.01"/>
+                              <joint name="right_r_finger_joint" pos="0 0 0" axis="0 1 0"
+                                     type="slide" range="-0.020833 0.0115"
+                                     damping="100" armature="1.0" frictionloss="1.0"/>
+                              <!-- Visual -->
+                              <geom class="visual" name="right_r_finger_v"
+                                    type="mesh" mesh="standard_narrow" material="finger_mat"/>
+                              <!-- Collision geoms -->
+                              <geom class="finger_col" name="right_r_finger_g0"
+                                    type="box" size="0.005 0.00675 0.0375"
+                                    pos="0 -0.01725 0.04"/>
+                              <geom class="finger_col" name="right_r_finger_g1"
+                                    type="box" size="0.005 0.025 0.0085"
+                                    pos="0.005 0.003 0.0083"/>
+                              <body name="right_r_finger_tip" pos="0 -0.01725 0.075">
+                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.01 0.01 0.01"/>
+                                <geom class="visual" name="right_r_fingertip_v"
+                                      type="mesh" mesh="half_round_tip" material="finger_mat"/>
+                                <geom class="finger_col" name="right_r_fingertip_g0"
+                                      type="box" size="0.004 0.004 0.0185"
+                                      pos="0 0.0045 -0.015"/>
+                                <geom class="finger_col" name="right_r_fingerpad_g0"
+                                      type="box" size="0.0035 0.004 0.0165"
+                                      pos="0 0.0047 -0.017"/>
+                              </body>
+                            </body><!-- /right_r_finger -->
+
+                          </body><!-- /right_gripper -->
+                        </body><!-- /right_hand -->
+                      </body><!-- /right_wrist -->
+                    </body><!-- /right_lower_forearm -->
+                  </body><!-- /right_upper_forearm -->
+                </body><!-- /right_lower_elbow -->
+              </body><!-- /right_upper_elbow -->
+            </body><!-- /right_lower_shoulder -->
+          </body><!-- /right_upper_shoulder -->
+        </body><!-- /right_arm_mount -->
+
+        <!-- ============================================================
+          LEFT ARM
+        ============================================================ -->
+        <body name="left_arm_mount" pos="0.024645 0.219645 0.118588" euler="0 0 0.7854">
+          <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
+
+          <body name="left_upper_shoulder" pos="0.055695 0 0.011038">
+            <inertial pos="0.01783 0.00086 0.19127" mass="5.70044"
+                      fullinertia="0.04709102262 0.03766976455 0.03595988478
+                                   0.00012787556  0.00614870039  0.00078086899"/>
+            <geom class="visual"    name="lus_v" type="mesh"     mesh="S0"    rgba="0.5 0.1 0.1 1"/>
+            <geom class="collision" name="lus_c" type="cylinder" size="0.06 0.1361" pos="0 0 0.1361"/>
+            <joint name="left_s0" type="hinge" axis="0 0 1" range="-1.7017 1.7017"/>
+
+            <body name="left_lower_shoulder" pos="0.069 0 0.27035" euler="-1.5708 0 0">
+              <inertial pos="0.06845 0.00269 -0.00529" mass="3.22698"
+                        fullinertia="0.01175209419 0.0278859752 0.02078749298
+                                     -0.00030096398 0.00207675762 -0.00018821993"/>
+              <geom class="visual"    name="lls_v" type="mesh"     mesh="S1"  rgba="0.5 0.1 0.1 1"/>
+              <geom class="collision" name="lls_c" type="cylinder" size="0.06 0.06"/>
+              <joint name="left_s1" type="hinge" axis="0 0 1" range="-2.147 1.047"/>
+
+              <body name="left_upper_elbow" pos="0.102 0 0" euler="1.5708 0 1.5708">
+                <inertial pos="-0.00276 0.00132 0.18086" mass="4.31272"
+                          fullinertia="0.02661733557 0.02844355207 0.01248008322
+                                       0.00029270634  0.00392189887  0.0010838933"/>
+                <geom class="visual"    name="lue_v" type="mesh"     mesh="E0"  rgba="0.5 0.1 0.1 1"/>
+                <geom class="collision" name="lue_c" type="cylinder" size="0.06 0.0535" pos="0 0 -0.0535"/>
+                <joint name="left_e0" type="hinge" axis="0 0 1" range="-3.0542 3.0542"/>
+
+                <body name="left_lower_elbow" pos="0.069 0 0.26242" euler="-1.5708 -1.5708 0">
+                  <inertial pos="0.02611 0.00159 -0.01117" mass="2.07206"
+                            fullinertia="0.00711582686 0.01318227876 0.00926852064
+                                         0.00036036173  0.0007459496  -0.00019663418"/>
+                  <geom class="visual"    name="lle_v" type="mesh"     mesh="E1"  rgba="0.5 0.1 0.1 1"/>
+                  <geom class="collision" name="lle_c" type="cylinder" size="0.06 0.05"/>
+                  <joint name="left_e1" type="hinge" axis="0 0 1" range="-0.05 2.618"/>
+
+                  <body name="left_upper_forearm" pos="0.10359 0 0" euler="1.5708 0 1.5708">
+                    <inertial pos="-0.00168 0.0046 0.13952" mass="2.24665"
+                              fullinertia="0.01667742825 0.01675457264 0.0037463115
+                                           0.00018403705  0.00018657629 -0.00064732352"/>
+                    <geom class="visual"    name="luf_v" type="mesh"     mesh="W0"  rgba="0.5 0.1 0.1 1"/>
+                    <geom class="collision" name="luf_c" type="cylinder" size="0.06 0.044" pos="0 0 -0.044"/>
+                    <joint name="left_w0" type="hinge" axis="0 0 1" range="-3.059 3.059"/>
+
+                    <body name="left_lower_forearm" pos="0.01 0 0.2707" euler="-1.5708 -1.5708 0">
+                      <inertial pos="0.06041 0.00697 0.006" mass="1.60979"
+                                fullinertia="0.00387607152 0.00700537914 0.0055275524
+                                             -0.00044384784 -0.00021115038  0.00015348067"/>
+                      <geom class="visual"    name="llf_v" type="mesh"     mesh="W1"  rgba="0.5 0.1 0.1 1"/>
+                      <geom class="collision" name="llf_c" type="cylinder" size="0.06 0.05"/>
+                      <joint name="left_w1" type="hinge" axis="0 0 1" range="-1.5708 2.094"/>
+
+                      <body name="left_wrist" pos="0.115975 0 0" euler="1.5708 0 1.5708">
+                        <inertial pos="0.00198 0.00125 0.01855" mass="0.35093"
+                                  fullinertia="0.00025289155 0.0002688601 0.0003074118
+                                               0.00000575311 -0.00000159345 -0.00000519818"/>
+                        <geom class="visual"    name="lwr_v" type="mesh"     mesh="W2"  rgba="0.1 0.1 0.1 1"/>
+                        <geom class="collision" name="lwr_c" type="cylinder" size="0.06 0.0825"/>
+                        <joint name="left_w2" type="hinge" axis="0 0 1" range="-3.059 3.059"/>
+
+                        <body name="left_hand" pos="0 0 0.11355">
+                          <inertial pos="0.01093 0.00042 -0.01532" mass="0.19125"
+                                    fullinertia="0.00017588 0.00021166377 0.00023745397
+                                                 0.00000147073  0.0000243633  0.00000172689"/>
+                          <geom class="collision" name="lhand_c" type="cylinder"
+                                size="0.04 0.0232" pos="0 0 -0.0232"/>
+
+                          <body name="left_hand_camera_body"
+                                pos="0.03825 0.012 0.015355" euler="0 0 -1.5708">
+                            <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8"/>
+                            <camera name="left_hand_camera" fovy="90"/>
+                          </body>
+
+                          <!-- ── LEFT GRIPPER (Rethink Electric Parallel Jaw) ───────────── -->
+                          <body name="left_gripper" pos="0 0 0.025">
+                            <inertial pos="0 0 0" quat="-0.5 0.5 0.5 0.5" mass="0.3"
+                                      diaginertia="3e-08 2e-08 2e-08"/>
+                            <site name="left_ft_frame" pos="0 0 0" size="0.01" rgba="1 0 0 1"
+                                  type="sphere" group="1"/>
+                            <!-- Visual meshes -->
+                            <geom class="visual" name="lgrip_connector_v"
+                                  type="mesh" mesh="connector_plate" material="gripper_mat_dark"
+                                  pos="0 0 0.0018" quat="0.7071068 0 0 0.7071068"/>
+                            <geom class="visual" name="lgrip_base0_v"
+                                  type="mesh" mesh="electric_gripper_base_0" material="gripper_mat_grey"
+                                  pos="0 0 0.0194" quat="0.7071068 0 0 0.7071068"/>
+                            <geom class="visual" name="lgrip_base1_v"
+                                  type="mesh" mesh="electric_gripper_base_1" material="gripper_mat_red"
+                                  pos="0 0 0.0194" quat="0.7071068 0 0 0.7071068"/>
+                            <!-- Gripper body collision -->
+                            <geom name="lgrip_base_c" type="cylinder" size="0.029 0.05"
+                                  pos="0.004 0.0 0.04" quat="0 0 0.707107 0.707107"
+                                  contype="2" conaffinity="4" rgba="0.3 0.3 0.3 0"/>
+
+                            <!-- End-effector frame -->
+                            <body name="left_gripper_eef" pos="0 0 0.109" quat="0.707105 0 0 -0.707105">
+                              <site name="left_grip_site" pos="0 0 0" size="0.01" rgba="0 1 0 0.5"
+                                    type="sphere" group="1"/>
+                            </body>
+
+                            <!-- Left finger (positive-Y side) -->
+                            <body name="left_l_finger" pos="0 0.01 0.0444">
+                              <inertial pos="0 0 0" quat="0 0 0 -1" mass="0.02"
+                                        diaginertia="0.01 0.01 0.01"/>
+                              <joint name="left_l_finger_joint" pos="0 0 0" axis="0 1 0"
+                                     type="slide" range="-0.0115 0.020833"
+                                     damping="100" armature="1.0" frictionloss="1.0"/>
+                              <geom class="visual" name="left_l_finger_v"
+                                    type="mesh" mesh="standard_narrow" material="finger_mat"
+                                    quat="0 0 0 -1"/>
+                              <geom class="finger_col" name="left_l_finger_g0"
+                                    type="box" size="0.005 0.00675 0.0375"
+                                    pos="0 0.01725 0.04" quat="0 0 0 -1"/>
+                              <geom class="finger_col" name="left_l_finger_g1"
+                                    type="box" size="0.005 0.025 0.0085"
+                                    pos="-0.005 -0.003 0.0083" quat="0 0 0 -1"/>
+                              <body name="left_l_finger_tip" pos="0 0.01725 0.075">
+                                <inertial pos="0 0 0" quat="0 0 0 1" mass="0.01"
+                                          diaginertia="0.01 0.01 0.01"/>
+                                <geom class="visual" name="left_l_fingertip_v"
+                                      type="mesh" mesh="half_round_tip" material="finger_mat"
+                                      quat="0 0 0 1"/>
+                                <geom class="finger_col" name="left_l_fingertip_g0"
+                                      type="box" size="0.004 0.004 0.0185"
+                                      pos="0 -0.0045 -0.015" quat="0 0 0 -1"/>
+                                <geom class="finger_col" name="left_l_fingerpad_g0"
+                                      type="box" size="0.0035 0.004 0.0165"
+                                      pos="0 -0.0047 -0.017"/>
+                              </body>
+                            </body><!-- /left_l_finger -->
+
+                            <!-- Right finger (negative-Y side) -->
+                            <body name="left_r_finger" pos="0 -0.01 0.0444">
+                              <inertial pos="0 0 0" mass="0.02" diaginertia="0.01 0.01 0.01"/>
+                              <joint name="left_r_finger_joint" pos="0 0 0" axis="0 1 0"
+                                     type="slide" range="-0.020833 0.0115"
+                                     damping="100" armature="1.0" frictionloss="1.0"/>
+                              <geom class="visual" name="left_r_finger_v"
+                                    type="mesh" mesh="standard_narrow" material="finger_mat"/>
+                              <geom class="finger_col" name="left_r_finger_g0"
+                                    type="box" size="0.005 0.00675 0.0375"
+                                    pos="0 -0.01725 0.04"/>
+                              <geom class="finger_col" name="left_r_finger_g1"
+                                    type="box" size="0.005 0.025 0.0085"
+                                    pos="0.005 0.003 0.0083"/>
+                              <body name="left_r_finger_tip" pos="0 -0.01725 0.075">
+                                <inertial pos="0 0 0" mass="0.01" diaginertia="0.01 0.01 0.01"/>
+                                <geom class="visual" name="left_r_fingertip_v"
+                                      type="mesh" mesh="half_round_tip" material="finger_mat"/>
+                                <geom class="finger_col" name="left_r_fingertip_g0"
+                                      type="box" size="0.004 0.004 0.0185"
+                                      pos="0 0.0045 -0.015"/>
+                                <geom class="finger_col" name="left_r_fingerpad_g0"
+                                      type="box" size="0.0035 0.004 0.0165"
+                                      pos="0 0.0047 -0.017"/>
+                              </body>
+                            </body><!-- /left_r_finger -->
+
+                          </body><!-- /left_gripper -->
+                        </body><!-- /left_hand -->
+                      </body><!-- /left_wrist -->
+                    </body><!-- /left_lower_forearm -->
+                  </body><!-- /left_upper_forearm -->
+                </body><!-- /left_lower_elbow -->
+              </body><!-- /left_upper_elbow -->
+            </body><!-- /left_lower_shoulder -->
+          </body><!-- /left_upper_shoulder -->
+        </body><!-- /left_arm_mount -->
+
+      </body><!-- /torso -->
+    </body><!-- /base -->
+  </worldbody>
+
+  <!-- ================================================================
+    ACTUATORS
+
+    Arm joints : velocity-controlled (kv=30 shoulder/elbow, kv=10 wrist)
+    Gripper    : position-controlled (kp=1000, ±20 N)
+                 ctrlrange = joint range for each finger
+
+    qpos/ctrl order:
+      head_pan | right arm (s0..w2) | right gripper (l,r) | left arm (s0..w2) | left gripper (l,r)
+  ================================================================ -->
+  <actuator>
+    <!-- Head -->
+    <velocity name="head_pan_v"  joint="head_pan"  kv="5"  ctrlrange="-1.0 1.0"/>
+
+    <!-- Right arm -->
+    <velocity name="right_s0_v"  joint="right_s0"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_s1_v"  joint="right_s1"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_e0_v"  joint="right_e0"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_e1_v"  joint="right_e1"  kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="right_w0_v"  joint="right_w0"  kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="right_w1_v"  joint="right_w1"  kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="right_w2_v"  joint="right_w2"  kv="10" ctrlrange="-4.0 4.0"/>
+
+    <!-- Right gripper fingers (position-controlled) -->
+    <position name="right_gripper_l" joint="right_l_finger_joint"
+              kp="1000" forcelimited="true" forcerange="-20 20"
+              ctrllimited="true" ctrlrange="-0.0115 0.020833"/>
+    <position name="right_gripper_r" joint="right_r_finger_joint"
+              kp="1000" forcelimited="true" forcerange="-20 20"
+              ctrllimited="true" ctrlrange="-0.020833 0.0115"/>
+
+    <!-- Left arm -->
+    <velocity name="left_s0_v"   joint="left_s0"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_s1_v"   joint="left_s1"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_e0_v"   joint="left_e0"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_e1_v"   joint="left_e1"   kv="30" ctrlrange="-3.0 3.0"/>
+    <velocity name="left_w0_v"   joint="left_w0"   kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="left_w1_v"   joint="left_w1"   kv="10" ctrlrange="-4.0 4.0"/>
+    <velocity name="left_w2_v"   joint="left_w2"   kv="10" ctrlrange="-4.0 4.0"/>
+
+    <!-- Left gripper fingers (position-controlled) -->
+    <position name="left_gripper_l" joint="left_l_finger_joint"
+              kp="1000" forcelimited="true" forcerange="-20 20"
+              ctrllimited="true" ctrlrange="-0.0115 0.020833"/>
+    <position name="left_gripper_r" joint="left_r_finger_joint"
+              kp="1000" forcelimited="true" forcerange="-20 20"
+              ctrllimited="true" ctrlrange="-0.020833 0.0115"/>
+  </actuator>
+
+  <!-- ================================================================
+    KEYFRAME — "home" pose, both grippers fully open.
+
+    qpos (26 values):
+      cube_free (7): x y z qw qx qy qz
+      head_pan  (1): 0
+      right arm (7): s0 s1 e0 e1 w0 w1 w2
+      right grip(2): l_finger r_finger  (open = +0.020833 / -0.020833)
+      left arm  (7): s0 s1 e0 e1 w0 w1 w2
+      left grip (2): l_finger r_finger  (open = +0.020833 / -0.020833)
+  ================================================================ -->
+  <keyframe>
+    <key name="home"
+         qpos="0.65 -0.20 0.525 1 0 0 0
+               0
+               0 -0.9599 0 2.0 0 0.7854 0   0.020833 -0.020833
+               0 -0.9599 0 2.0 0 0.7854 0   0.020833 -0.020833"/>
+  </keyframe>
+
+  <!-- ================================================================
+    SENSORS — force/torque at each wrist
+  ================================================================ -->
+  <sensor>
+    <force  name="right_force_ee"  site="right_ft_frame"/>
+    <torque name="right_torque_ee" site="right_ft_frame"/>
+    <force  name="left_force_ee"   site="left_ft_frame"/>
+    <torque name="left_torque_ee"  site="left_ft_frame"/>
+  </sensor>
+
+</mujoco>
